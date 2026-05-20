@@ -1,13 +1,7 @@
+// ▼ Buraya kendi TMDB API v3 anahtarını yaz  →  themoviedb.org/settings/api
+export const TMDB_API_KEY = "4f4e9c4e6b7f3d2a1e8c5b9d0f2a7e3c";
+
 export const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
-
-const TMDB_KEY_STORAGE = "woxstream_tmdb_key";
-
-export function getTmdbKey(): string {
-  try { return localStorage.getItem(TMDB_KEY_STORAGE) || ""; } catch { return ""; }
-}
-export function setTmdbKey(key: string): void {
-  try { localStorage.setItem(TMDB_KEY_STORAGE, key); } catch {}
-}
 
 export function tmdbPoster(path: string, size: "w342" | "w500" | "w780" | "original" = "w780") {
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
@@ -39,11 +33,10 @@ const GENRE_MAP: Record<number, string> = {
 };
 
 export async function searchTmdb(query: string): Promise<TmdbSearchResult[]> {
-  const key = getTmdbKey();
-  if (!key) return [];
+  if (!TMDB_API_KEY) return [];
   try {
     const res = await fetch(
-      `https://api.themoviedb.org/3/search/multi?api_key=${key}&query=${encodeURIComponent(query)}&language=tr-TR&page=1`
+      `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&language=tr-TR&page=1`
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -58,7 +51,7 @@ export async function searchTmdb(query: string): Promise<TmdbSearchResult[]> {
         overview: r.overview || "",
         year: (r.release_date || r.first_air_date || "").slice(0, 4),
         rating: r.vote_average ? (r.vote_average as number).toFixed(1) + "/10" : "N/A",
-        mediaType: r.media_type,
+        mediaType: r.media_type as "movie" | "tv",
         genres: (r.genre_ids || []).slice(0, 2).map((id: number) => GENRE_MAP[id] || "").filter(Boolean).join(" / "),
       }));
   } catch {
