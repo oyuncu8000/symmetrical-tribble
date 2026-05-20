@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "WoxStream - Streaming Platform"
+version = "1.0.0"
+id = "artifacts/stream-platform"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19492
+
+[services.development]
+run = "pnpm --filter @workspace/stream-platform run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/stream-platform", "run", "build" ]
+publicDir = "artifacts/stream-platform/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19492"
+BASE_PATH = "/"
