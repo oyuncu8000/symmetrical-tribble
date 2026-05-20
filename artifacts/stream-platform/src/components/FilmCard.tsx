@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { FilmCardData } from "@/data/content";
-import { Play } from "lucide-react";
+import { Play, Plus, Check } from "lucide-react";
+import { isInWatchlist, addToWatchlist, removeFromWatchlist } from "@/lib/watchlist";
 
 interface FilmCardProps {
   card: FilmCardData;
@@ -21,7 +22,6 @@ const GENRE_GRADIENTS: Record<string, string> = {
   "Crime": "from-zinc-900 via-slate-800 to-gray-900",
   "Monster": "from-green-900 via-emerald-900 to-teal-900",
 };
-
 function getGradient(genre: string) {
   const key = Object.keys(GENRE_GRADIENTS).find(g => genre.includes(g));
   return key ? GENRE_GRADIENTS[key] : "from-zinc-900 via-slate-800 to-gray-900";
@@ -30,25 +30,40 @@ function getGradient(genre: string) {
 export function FilmCard({ card, isSpecial = false }: FilmCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [inList, setInList] = useState(isInWatchlist(card.videoId));
 
   const gradient = getGradient(card.genre);
+  const cardWidth = isSpecial ? "w-[380px]" : "w-[300px]";
+
+  const handleWatchlist = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (inList) {
+      removeFromWatchlist(card.videoId);
+      setInList(false);
+    } else {
+      addToWatchlist({
+        videoId: card.videoId, playlistId: card.playlistId, title: card.title,
+        image: card.image, genre: card.genre, rating: card.rating, year: card.year, description: card.description,
+      });
+      setInList(true);
+    }
+  };
 
   return (
-    <Link href={`/player?playlistId=${card.playlistId}&videoId=${card.videoId}`}>
+    <Link href={`/detail?videoId=${card.videoId}`}>
       <motion.div
         data-testid={`card-film-${card.videoId}`}
-        className={`relative flex-none cursor-pointer rounded-xl overflow-hidden ${
-          isSpecial
-            ? "w-[320px] aspect-video border border-primary/30"
-            : "w-[260px] aspect-video"
+        className={`relative flex-none cursor-pointer rounded-xl overflow-hidden ${cardWidth} aspect-video ${
+          isSpecial ? "border border-primary/25" : ""
         }`}
         onHoverStart={() => setIsHovered(true)}
         onHoverEnd={() => setIsHovered(false)}
-        whileHover={{ scale: 1.07, zIndex: 10, y: -6 }}
-        transition={{ type: "spring", stiffness: 280, damping: 22 }}
+        whileHover={{ scale: 1.06, zIndex: 20, y: -8 }}
+        transition={{ type: "spring", stiffness: 260, damping: 22 }}
         style={{ transformStyle: "preserve-3d" }}
       >
-        {/* Image or fallback gradient */}
+        {/* Thumbnail */}
         {!imgError ? (
           <img
             src={card.image}
@@ -58,17 +73,38 @@ export function FilmCard({ card, isSpecial = false }: FilmCardProps) {
             loading="lazy"
           />
         ) : (
-          <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-end p-3`}>
-            <span className="text-white/30 text-xs font-mono uppercase tracking-widest">{card.genre}</span>
+          <div className={`w-full h-full bg-gradient-to-br ${gradient}`} />
+        )}
+
+        {/* Shimmer effect for special cards */}
+        {isSpecial && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -skew-x-12"
+              animate={{ x: ["-100%", "200%"] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "linear", repeatDelay: 2 }}
+            />
           </div>
         )}
 
-        {/* Always-visible bottom gradient + title */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent pointer-events-none" />
+        {/* Persistent gradient + info */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent pointer-events-none" />
         <div className="absolute bottom-0 left-0 right-0 p-3 pointer-events-none">
-          <p className="text-white text-sm font-bold leading-tight line-clamp-1 drop-shadow-md">{card.title}</p>
+          <p className="text-white text-sm font-bold leading-tight line-clamp-1 drop-shadow-lg">{card.title}</p>
           <p className="text-white/50 text-xs mt-0.5">{card.year} · {card.genre.split("/")[0].trim()}</p>
         </div>
+
+        {/* Watchlist quick-add button (top-right) */}
+        <button
+          onClick={handleWatchlist}
+          data-testid={`card-watchlist-${card.videoId}`}
+          className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 ${
+            inList ? "bg-primary text-black shadow-[0_0_10px_rgba(245,166,35,0.6)]" : "bg-black/50 text-white/70 hover:bg-primary/80 hover:text-black"
+          } ${isHovered ? "opacity-100" : "opacity-0"}`}
+          style={{ pointerEvents: "auto" }}
+        >
+          {inList ? <Check size={13} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
+        </button>
 
         {/* Special badge */}
         {isSpecial && (
@@ -84,36 +120,50 @@ export function FilmCard({ card, isSpecial = false }: FilmCardProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className={`absolute inset-0 rounded-xl pointer-events-none ${
-                isSpecial
-                  ? "ring-2 ring-accent shadow-[0_0_24px_rgba(255,215,0,0.5)]"
-                  : "ring-2 ring-primary shadow-[0_0_20px_rgba(245,166,35,0.45)]"
-              }`}
+              className="absolute inset-0 rounded-xl pointer-events-none"
+              style={isSpecial
+                ? { boxShadow: "inset 0 0 0 2px hsl(45 100% 51%)", filter: "drop-shadow(0 0 20px rgba(255,215,0,0.5))" }
+                : { boxShadow: "inset 0 0 0 2px hsl(38 90% 56%)", filter: "drop-shadow(0 0 16px rgba(245,166,35,0.45))" }
+              }
             />
           )}
         </AnimatePresence>
 
-        {/* Hover overlay info */}
+        {/* Hover overlay */}
         <AnimatePresence>
           {isHovered && (
             <motion.div
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/70 to-black/20 p-4 flex flex-col justify-end"
+              transition={{ duration: 0.18 }}
+              className="absolute inset-0 bg-gradient-to-t from-black/96 via-black/65 to-black/20 p-4 flex flex-col justify-end"
             >
-              <h3 className="font-bold text-base leading-tight mb-1 text-white">{card.title}</h3>
-              <div className="flex items-center gap-2 text-xs text-white/70 mb-3">
+              <h3 className="font-bold text-base leading-tight mb-1 text-white line-clamp-1">{card.title}</h3>
+              <div className="flex items-center gap-2 text-xs text-white/65 mb-3">
                 <span className="text-green-400 font-semibold">{card.rating}</span>
                 <span>·</span>
                 <span>{card.year}</span>
                 <span>·</span>
                 <span>{card.genre.split("/")[0].trim()}</span>
               </div>
-              <button className="flex items-center justify-center gap-2 bg-white text-black font-bold py-1.5 px-4 rounded-lg hover:bg-primary hover:text-black transition-colors w-full text-sm shadow-[0_0_12px_rgba(245,166,35,0.4)]">
-                <Play size={14} fill="currentColor" /> İzle
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-bold text-black text-xs shadow-[0_0_12px_rgba(245,166,35,0.4)] transition-all hover:scale-105"
+                  style={{ background: "linear-gradient(135deg, hsl(38 90% 56%), hsl(45 100% 51%))" }}
+                >
+                  <Play size={13} fill="currentColor" /> Detay
+                </button>
+                <button
+                  onClick={handleWatchlist}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs border transition-all hover:scale-105 ${
+                    inList ? "bg-primary/20 border-primary text-primary" : "bg-white/8 border-white/20 text-white/80"
+                  }`}
+                  style={{ pointerEvents: "auto" }}
+                >
+                  {inList ? <Check size={13} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
