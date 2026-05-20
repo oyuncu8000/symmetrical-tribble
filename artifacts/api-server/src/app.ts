@@ -6,25 +6,27 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// ✅ FIX: pino-http doğru kullanım (default export fix)
 app.use(
-  pinoHttp({
+  (pinoHttp as unknown as () => any)({
     logger,
     serializers: {
-      req(req) {
+      req(req: any) {
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
         };
       },
-      res(res) {
+      res(res: any) {
         return {
           statusCode: res.statusCode,
         };
       },
     },
-  }),
+  })
 );
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
