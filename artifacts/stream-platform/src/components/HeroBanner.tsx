@@ -20,7 +20,7 @@ export function HeroBanner() {
         transition={{ duration: 20, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
       >
         <img
-          src={featuredHero.image}
+          src={featuredHero.backdrop}
           alt={featuredHero.title}
           className="w-full h-full object-cover opacity-60"
         />

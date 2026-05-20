@@ -1,17 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize, X } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface PlayerControlsProps {
   player: any;
-  title: string;
-  progress: string;
   onClose: () => void;
   onNext: () => void;
   onPrev: () => void;
 }
 
-export function PlayerControls({ player, title, progress, onClose, onNext, onPrev }: PlayerControlsProps) {
+export function PlayerControls({ player, onNext, onPrev }: PlayerControlsProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(100);
@@ -19,39 +17,50 @@ export function PlayerControls({ player, title, progress, onClose, onNext, onPre
   const [duration, setDuration] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!player) return;
 
-    const interval = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       try {
-        if (player.getCurrentTime) setCurrentTime(player.getCurrentTime());
-        if (player.getDuration) setDuration(player.getDuration());
-      } catch (e) {}
-    }, 1000);
+        if (typeof player.getCurrentTime === "function") setCurrentTime(player.getCurrentTime());
+        if (typeof player.getDuration === "function") setDuration(player.getDuration());
+        const state = player.getPlayerState?.();
+        if (state === 1) setIsPlaying(true);
+        if (state === 2) setIsPlaying(false);
+      } catch (_) {}
+    }, 500);
 
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [player]);
+
+  useEffect(() => {
     const handleMouseMove = () => {
       setIsVisible(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => setIsVisible(false), 3000);
+      timeoutRef.current = setTimeout(() => setIsVisible(false), 3500);
     };
-
     window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("touchstart", handleMouseMove);
     return () => {
-      clearInterval(interval);
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("touchstart", handleMouseMove);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [player]);
+  }, []);
 
   const togglePlay = () => {
     if (!player) return;
     if (isPlaying) {
       player.pauseVideo();
+      setIsPlaying(false);
     } else {
       player.playVideo();
+      setIsPlaying(true);
     }
-    setIsPlaying(!isPlaying);
   };
 
   const toggleMute = () => {
@@ -62,88 +71,155 @@ export function PlayerControls({ player, title, progress, onClose, onNext, onPre
     } else {
       player.mute();
     }
-    setIsMuted(!isMuted);
+    setIsMuted(v => !v);
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!player) return;
+    const v = Number(e.target.value);
+    setVolume(v);
+    player.setVolume(v);
+    if (v === 0) {
+      player.mute();
+      setIsMuted(true);
+    } else {
+      player.unMute();
+      setIsMuted(false);
+    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!player) return;
-    const time = Number(e.target.value);
-    player.seekTo(time);
-    setCurrentTime(time);
+    const t = Number(e.target.value);
+    player.seekTo(t, true);
+    setCurrentTime(t);
   };
 
-  const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+  const formatTime = (s: number) => {
+    if (!s || isNaN(s)) return "0:00";
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
   };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          initial={{ opacity: 0, y: 50 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 50 }}
-          className="absolute bottom-0 left-0 right-0 px-8 py-6 bg-black/85 backdrop-blur-xl border-t border-white/10"
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ duration: 0.25 }}
+          className="w-full px-6 pb-6 pt-4"
+          style={{
+            background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 70%, transparent 100%)",
+          }}
         >
-          {/* Progress Bar */}
-          <div className="w-full flex items-center gap-4 mb-4">
-            <span className="text-xs font-mono text-white/70 w-12 text-right">{formatTime(currentTime)}</span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              value={currentTime}
-              onChange={handleSeek}
-              className="flex-1 h-1.5 appearance-none bg-white/20 rounded-full outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(245,166,35,0.8)] cursor-pointer"
-            />
-            <span className="text-xs font-mono text-white/70 w-12">{formatTime(duration)}</span>
+          {/* Seek bar */}
+          <div className="w-full flex items-center gap-3 mb-4">
+            <span className="text-xs font-mono text-white/60 w-10 text-right tabular-nums">
+              {formatTime(currentTime)}
+            </span>
+            <div className="relative flex-1 h-1 group">
+              <div className="absolute inset-0 rounded-full bg-white/20" />
+              <div
+                className="absolute top-0 left-0 h-full rounded-full"
+                style={{
+                  width: `${progress}%`,
+                  background: "linear-gradient(to right, hsl(38 90% 56%), hsl(45 100% 51%))",
+                  boxShadow: "0 0 8px rgba(245,166,35,0.7)",
+                }}
+              />
+              <input
+                type="range"
+                min={0}
+                max={duration || 100}
+                value={currentTime}
+                onChange={handleSeek}
+                data-testid="seek-bar"
+                className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+                style={{ zIndex: 10 }}
+              />
+            </div>
+            <span className="text-xs font-mono text-white/60 w-10 tabular-nums">
+              {formatTime(duration)}
+            </span>
           </div>
 
+          {/* Controls row */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <button onClick={onPrev} className="text-white/80 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all">
-                <SkipBack size={24} />
-              </button>
-              
-              <button 
-                onClick={togglePlay} 
-                className="w-12 h-12 flex items-center justify-center rounded-full bg-white text-black hover:scale-110 transition-transform shadow-[0_0_15px_rgba(255,255,255,0.5)]"
+            {/* Left: play controls + volume */}
+            <div className="flex items-center gap-5">
+              <button
+                onClick={onPrev}
+                data-testid="button-prev"
+                className="text-white/70 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.5)] transition-all active:scale-90"
               >
-                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+                <SkipBack size={22} />
               </button>
 
-              <button onClick={onNext} className="text-white/80 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all">
-                <SkipForward size={24} />
+              <button
+                onClick={togglePlay}
+                data-testid="button-play-pause"
+                className="w-11 h-11 flex items-center justify-center rounded-full transition-all active:scale-90"
+                style={{
+                  background: "hsl(38 90% 56%)",
+                  boxShadow: "0 0 20px rgba(245,166,35,0.6), 0 0 40px rgba(245,166,35,0.2)",
+                }}
+              >
+                {isPlaying
+                  ? <Pause size={20} fill="black" color="black" />
+                  : <Play size={20} fill="black" color="black" className="ml-0.5" />
+                }
               </button>
 
-              <div className="flex items-center gap-2 ml-4">
-                <button onClick={toggleMute} className="text-white/80 hover:text-white transition-colors">
-                  {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              <button
+                onClick={onNext}
+                data-testid="button-next"
+                className="text-white/70 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.5)] transition-all active:scale-90"
+              >
+                <SkipForward size={22} />
+              </button>
+
+              <div className="flex items-center gap-2 ml-2">
+                <button
+                  onClick={toggleMute}
+                  data-testid="button-mute"
+                  className="text-white/70 hover:text-white transition-colors"
+                >
+                  {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
                 </button>
+                <div className="relative w-20 h-1 group hidden sm:block">
+                  <div className="absolute inset-0 rounded-full bg-white/20" />
+                  <div
+                    className="absolute top-0 left-0 h-full rounded-full bg-white/70"
+                    style={{ width: `${isMuted ? 0 : volume}%` }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolumeChange}
+                    data-testid="volume-slider"
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col items-center">
-              <h3 className="font-bold text-lg text-white font-['Bebas_Neue'] tracking-wider">{title}</h3>
-              <span className="text-xs text-primary font-mono">{progress}</span>
-            </div>
-
-            <div className="flex items-center gap-6">
-              <button 
-                onClick={() => document.documentElement.requestFullscreen()} 
-                className="text-white/80 hover:text-white transition-colors"
+            {/* Right: fullscreen */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => document.documentElement.requestFullscreen?.()}
+                data-testid="button-fullscreen"
+                className="text-white/70 hover:text-white transition-colors"
               >
-                <Maximize size={20} />
-              </button>
-              <button 
-                onClick={onClose}
-                className="text-white/80 hover:text-destructive hover:drop-shadow-[0_0_8px_rgba(255,0,0,0.5)] transition-all"
-              >
-                <X size={24} />
+                <Maximize size={18} />
               </button>
             </div>
           </div>
