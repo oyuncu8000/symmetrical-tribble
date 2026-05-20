@@ -1,14 +1,18 @@
-import express from "express";
+import express, { type Express } from "express";
 import cors from "cors";
-import router from "./routes";
+import router from "./routes/index.js";
 
-const app = express();
+const app: Express = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+app.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    message: "API çalışıyor 🚀",
+  });
 });
 
 app.use("/api", router);
